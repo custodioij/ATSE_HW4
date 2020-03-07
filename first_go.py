@@ -52,7 +52,7 @@ for window in windows:
 def WeightedForecast(y, X, x_pred, y_pred):
     predictions = np.zeros(np.shape(X)[1])
     for i in range(np.shape(X)[1]):
-        xx = X.iloc[:, i]
+        xx = X[:, i]
         xx = stats.add_constant(xx)
         xx_pred = np.hstack((1, x_pred.iloc[i]))
         model = stats.regression.linear_model.OLS(y, xx)
@@ -63,9 +63,9 @@ def WeightedForecast(y, X, x_pred, y_pred):
     return error
 
 def AR1(y, X, x_pred, y_pred):
-    xx = X.iloc[:, 0]
+    xx = X[:, 0]
     xx = stats.add_constant(xx)
-    xx_pred = np.hstack((1, x_pred.iloc[0]))
+    xx_pred = np.hstack((1, x_pred[0]))
     model = stats.regression.linear_model.OLS(y, xx)
     results = model.fit()
     y_hat = results.predict(xx_pred)
