@@ -108,9 +108,15 @@ for window in windows:
 
 """ Comparison """
 # RMSE:
-rmse = lambda xx: np.sqrt(np.sum([x**2 for x in xx]))
+rmse = lambda xx: np.sqrt(np.mean([x**2 for x in xx]))
+mafe = lambda xx: np.mean(np.abs([x for x in xx]))
 
 
+df_rmse = np.vstack([rmse(e_mean), rmse(e_AR), rmse(e_KS), rmse(e_WF), rmse(e_FA)]).T
+df_mafe = np.vstack([mafe(e_mean), mafe(e_AR), mafe(e_KS), mafe(e_WF), mafe(e_FA)]).T
+mOutM= np.vstack([df_rmse, df_mafe])
+dfOut1 = pd.DataFrame(mOutM, columns =['$Mean model$', '$AR(1)$', '$Kitchen-sink$', '$Weighted forecast$', '$FAVAR$'], index=['MSFE','MAFE'])
+print(dfOut1.to_latex(escape=False))
 print(rmse(e_mean))
 print(rmse(e_AR))
 
