@@ -3,6 +3,7 @@ import statsmodels.api as stats
 import numpy as np
 import OLS_func as ols
 from sklearn.decomposition import PCA
+import matplotlib.pyplot as plt
 
 
 
@@ -69,16 +70,16 @@ def AR1(y, X, x_pred, y_pred):
 def factor_augmented(vY, mX, vX_new, y_new):
     pca = PCA(n_components=3)
 
-    xx = mX.copy()
-    xx_new = vX_new.copy()
+    xx = mX[:, 2:].copy()  # Exclude constant and lagged y
+    xx_new = vX_new[2:].copy()
     xx_new -= np.mean(xx)
     xx -= np.mean(xx)
     xx_new /= np.std(xx)
     xx /= np.std(xx)
 
     pca_fit = pca.fit(xx)
-    PC = pca_fit.transform(xx)
-    PC_new = pca_fit.transform(xx_new.reshape(1, -1))[0]
+    PC = np.hstack((pca_fit.transform(xx), mX[:, 1:2]))
+    PC_new = np.hstack((pca_fit.transform(xx_new.reshape(1, -1))[0], vX_new[1:2]))
 
     betas = ols.EstimateMM(vY, PC)
     yFit = ols.OLS_predict(PC_new, betas)
@@ -117,3 +118,23 @@ print(rmse(e_KS))
 print(rmse(e_WF))
 print(rmse(e_FA))
 
+""" Investigate instability """
+# Calculate 2-year moving average of forecast errors and plot
+
+errors = [e_AR, e_mean, e_KS, e_WF, e_FA]
+moving_avg = []
+
+for error in errors:
+    local_mean = []
+    for t in range(len(error) - 24):
+        local_mean += [rmse(error[t:(t+24)])]
+    moving_avg += [local_mean]
+
+to_plot = pd.DataFrame(dt[-len(moving_avg[1]):])
+to_plot = pd.concat([to_plot, pd.DataFrame(np.array(moving_avg).T, index=to_plot.index)], axis=1)
+to_plot.columns = ['Month', 'AR', 'Mean', 'KS', 'WF', 'FA']
+
+# plt.close('all')
+# fig = plt.figure()
+to_plot.plot(x='Month')
+plt.show()
