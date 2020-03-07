@@ -2,6 +2,7 @@ import pandas as pd
 import statsmodels.api as stats
 import numpy as np
 import OLS_func as ols
+from sklearn.decomposition import PCA
 
 
 
@@ -65,12 +66,34 @@ def AR1(y, X, x_pred, y_pred):
     return error
 
 
+def factor_augmented(vY, mX, vX_new, y_new):
+    pca = PCA(n_components=3)
+
+    xx = mX.copy()
+    xx_new = vX_new.copy()
+    xx_new -= np.mean(xx)
+    xx -= np.mean(xx)
+    xx_new /= np.std(xx)
+    xx /= np.std(xx)
+
+    pca_fit = pca.fit(xx)
+    PC = pca_fit.transform(xx)
+    PC_new = pca_fit.transform(xx_new.reshape(1, -1))[0]
+
+    betas = ols.EstimateMM(vY, PC)
+    yFit = ols.OLS_predict(PC_new, betas)
+    error = yFit - y_new
+    return error
+
+
 """ Big loop to get predictions """
 
 windows = window_fct()
 e_KS = []
 e_WF = []
 e_AR = []
+e_FA = []
+e_mean = []
 for window in windows:
     X = mX[window[0]:window[1], :]
     X_new = mX[window[1], :]
@@ -79,11 +102,18 @@ for window in windows:
     e_KS += [kitchen_sink(Y, X, X_new, y_new)]
     e_WF += [WeightedForecast(Y, X, X_new, y_new)]
     e_AR += [AR1(Y, X, X_new, y_new)]
+    e_FA += [factor_augmented(Y, X, X_new, y_new)]
+    e_mean += [np.mean(Y) - y_new]
 
 """ Comparison """
 # RMSE:
 rmse = lambda xx: np.sqrt(np.sum([x**2 for x in xx]))
 
+
+print(rmse(e_mean))
+print(rmse(e_AR))
+
 print(rmse(e_KS))
 print(rmse(e_WF))
-print(rmse(e_AR))
+print(rmse(e_FA))
+
