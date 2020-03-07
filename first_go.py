@@ -24,6 +24,15 @@ def WeightedForecast(y, X, x_pred, y_pred):
         results = model.fit()
         predictions[i] = results.predict(xx_pred)
     y_hat = np.mean(predictions)
-    error = y_pred - yhat
+    error = y_pred - y_hat
     return error
 
+def AR1(y, X, x_pred, y_pred):
+    xx = X.iloc[:, 0]
+    xx = stats.add_constant(xx)
+    xx_pred = np.hstack((1, x_pred.iloc[0]))
+    model = stats.regression.linear_model.OLS(y, xx)
+    results = model.fit()
+    y_hat = results.predict(xx_pred)
+    error = y_pred - y_hat
+    return error
