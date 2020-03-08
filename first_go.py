@@ -4,12 +4,12 @@ import numpy as np
 import OLS_func as ols
 from sklearn.decomposition import PCA
 import matplotlib.pyplot as plt
-
+from scipy.stats import norm
 
 
 data = pd.read_excel("USEMP.xlsx")
 dt = data.Month
-mData = np.array(data.iloc[:,1:])
+mData = np.array(data.iloc[:, 1:])
 mX = mData[:, 1:]
 mX = stats.add_constant(mX)
 vY = mData[:, 0]  # Careful with sahpe here
@@ -41,7 +41,7 @@ def kitchen_sink(vY, mX, vX_new, y_new):
     """
     betas = ols.EstimateMM(vY, mX)
     yFit = ols.OLS_predict(vX_new, betas)
-    return yFit - y_new
+    return [yFit - y_new, yFit]
 
 
 def WeightedForecast(y, X, x_pred, y_pred):
@@ -54,7 +54,7 @@ def WeightedForecast(y, X, x_pred, y_pred):
         predictions[i] = results.predict(xx_pred)
     y_hat = np.mean(predictions)
     error = y_pred - y_hat
-    return error
+    return [error, y_hat]
 
 
 def AR1(y, X, x_pred, y_pred):
@@ -64,7 +64,7 @@ def AR1(y, X, x_pred, y_pred):
     results = model.fit()
     y_hat = results.predict(xx_pred)
     error = y_pred - y_hat
-    return error
+    return [error[0], y_hat[0]]
 
 
 def factor_augmented(vY, mX, vX_new, y_new):
@@ -84,28 +84,55 @@ def factor_augmented(vY, mX, vX_new, y_new):
     betas = ols.EstimateMM(vY, PC)
     yFit = ols.OLS_predict(PC_new, betas)
     error = yFit - y_new
-    return error
+    return [error, yFit]
 
 
 """ Big loop to get predictions """
 
 windows = window_fct()
-e_KS = []
-e_WF = []
-e_AR = []
-e_FA = []
+e_KS, yFit_KS = [], []
+e_WF, yFit_WF = [], []
+e_AR, yFit_AR = [], []
+e_FA, yFit_FA = [], []
 e_mean = []
 for window in windows:
     X = mX[window[0]:window[1], :]
     X_new = mX[window[1], :]
     Y = vY[window[0]:window[1]]
     y_new = vY[window[1]]
-    e_KS += [kitchen_sink(Y, X, X_new, y_new)]
-    e_WF += [WeightedForecast(Y, X, X_new, y_new)]
-    e_AR += [AR1(Y, X, X_new, y_new)]
-    e_FA += [factor_augmented(Y, X, X_new, y_new)]
+    e_KS += [kitchen_sink(Y, X, X_new, y_new)[0]]
+    e_WF += [WeightedForecast(Y, X, X_new, y_new)[0]]
+    e_AR += [AR1(Y, X, X_new, y_new)[0]]
+    e_FA += [factor_augmented(Y, X, X_new, y_new)[0]]
+    yFit_KS += [kitchen_sink(Y, X, X_new, y_new)[1]]
+    yFit_WF += [WeightedForecast(Y, X, X_new, y_new)[1]]
+    yFit_AR += [AR1(Y, X, X_new, y_new)[1]]
+    yFit_FA += [factor_augmented(Y, X, X_new, y_new)[1]]
     e_mean += [np.mean(Y) - y_new]
 
+def DieboldMarianoTest(mE, Name, loss):
+    '''
+    Diebold-Mariano test
+    '''
+    iT = np.shape(mE)[1]
+    mRes = np.zeros((iT, iT))
+    for i in range(iT):
+        for j in range(i + 1):
+            if loss == 'RMSE':
+                d = mE[:, i] ** 2 - mE[:, j] ** 2
+            if loss == 'MAFE':
+                d = np.abs(mE[:, i]) - np.abs(mE[:, j])
+            dmean = np.mean(d)
+            dstd = np.std(d)
+            test = np.sqrt(np.shape(d)[0]) * dmean / dstd
+            mRes[j, i] = (1 - norm.cdf(np.abs(test))) * 2
+    dfDM = pd.DataFrame(np.round(mRes, 4), index=Name, columns=Name)
+    print(dfDM.to_latex(escape=False))
+
+mE = np.vstack(np.array([e_mean, e_AR, e_KS, e_WF, e_FA])).T
+Name = np.array(('$Mean model$', '$AR(1)$', '$Kitchen-sink$', '$Weighted forecast$', '$FAVAR$'))
+DieboldMarianoTest(mE, Name, 'RMSE')
+DieboldMarianoTest(mE, Name, 'MAFE')
 """ Comparison """
 # RMSE:
 rmse = lambda xx: np.sqrt(np.mean([x**2 for x in xx]))
@@ -144,3 +171,28 @@ to_plot.columns = ['Month', 'AR', 'Mean', 'KS', 'WF', 'FA']
 # fig = plt.figure()
 to_plot.plot(x='Month')
 plt.show()
+
+moving_avg_abs = []
+for error in errors:
+    local_mean_abs = []
+    for t in range(len(error) - 24):
+        local_mean_abs += [mafe(error[t:(t+24)])]
+    moving_avg_abs += [local_mean_abs]
+
+to_plot2 = pd.DataFrame(dt[-len(moving_avg_abs[1]):])
+to_plot2 = pd.concat([to_plot2, pd.DataFrame(np.array(moving_avg_abs).T, index=to_plot2.index)], axis=1)
+to_plot2.columns = ['Month', 'AR', 'Mean', 'KS', 'WF', 'FA']
+to_plot2.plot(x='Month')
+plt.show()
+
+Columns = np.array(('AR(1)', 'Kitchen-sink', 'FAVAR'))
+yFit = np.array((yFit_AR, yFit_KS, yFit_FA)).T
+ii = dt[(dt == "1980-01-01")].index[0]
+for i in range(3):
+    to_plot3 = pd.DataFrame(dt[ii:])
+    to_plot3 = pd.concat([to_plot3, pd.DataFrame(np.vstack((data.iloc[ii:, 1], yFit[:,i])).T, index=to_plot3.index)], axis=1)
+    to_plot3 = to_plot3.set_index('Month')
+    to_plot3.columns = ['true', Columns[i]]
+    to_plot3.plot()
+    plt.savefig(Columns[i] + ' forecast.png')
+    plt.show()
