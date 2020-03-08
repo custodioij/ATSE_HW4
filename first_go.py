@@ -92,11 +92,17 @@ def csr(vY, mX, vX_new, y_new, lag=False, k=None):
     mX = mX[:, 1:]  # Remove constant
     vX_new = vX_new[1:]
     if lag:
-        current = mX[1:, :]
-        lagged = mX[:-1, :]
-        mX = np.hstack((current, lagged))
+        # current = mX[1:, :]
+        # lagged = mX[:-1, :]
+        # mX = np.hstack((current, lagged))
+        # Keep lagged y
+        lagy = mX[:, [0]]
+        lagy_new = vX_new[0]
+        # Now remove it
+        mX = mX[:, 1:]
+        vX_new = vX_new[1:]
     if k is None:
-        k = mX.shape[1] # Account for the constant!
+        k = mX.shape[1]  # Account for the constant!
     # Create combinations
     l_subset = []
     for i in range(k):
@@ -105,6 +111,9 @@ def csr(vY, mX, vX_new, y_new, lag=False, k=None):
     for t_subset in l_subset:
         xx = stats.add_constant(mX[:, t_subset])
         xnew = np.hstack((1, vX_new[list(t_subset)]))
+        if lag:
+            xx = np.hstack((lagy, xx))
+            xnew = np.hstack((lagy_new, xnew))
         betas = ols.EstimateMM(vY, xx)
         l_yfit += [ols.OLS_predict(xnew, betas)]
     yfit = np.mean(l_yfit)
@@ -121,6 +130,7 @@ e_AR, yFit_AR = [], []
 e_FA, yFit_FA = [], []
 e_mean = []
 e_csr, yFit_CSR = [], []
+e_csr_lag, yFit_CSR_lag = [], []
 for window in windows:
     X = mX[window[0]:window[1], :]
     X_new = mX[window[1], :]
@@ -131,13 +141,16 @@ for window in windows:
     e_AR += [AR1(Y, X, X_new, y_new)[0]]
     e_FA += [factor_augmented(Y, X, X_new, y_new)[0]]
     csr_temp = csr(Y, X, X_new, y_new)
+    csr_lag_temp = csr(Y, X, X_new, y_new, lag=True)
     e_csr += [csr_temp[0]]
+    e_csr_lag += [csr_lag_temp[0]]
 
     yFit_KS += [kitchen_sink(Y, X, X_new, y_new)[1]]
     yFit_WF += [WeightedForecast(Y, X, X_new, y_new)[1]]
     yFit_AR += [AR1(Y, X, X_new, y_new)[1]]
     yFit_FA += [factor_augmented(Y, X, X_new, y_new)[1]]
     yFit_CSR += [csr_temp[1]]
+    yFit_CSR_lag += [csr_lag_temp[1]]
     e_mean += [np.mean(Y) - y_new]
 
 """ Comparison """
@@ -146,10 +159,11 @@ rmse = lambda xx: np.sqrt(np.mean([x**2 for x in xx]))
 mafe = lambda xx: np.mean(np.abs([x for x in xx]))
 
 
-df_rmse = np.vstack([rmse(e_mean), rmse(e_AR), rmse(e_KS), rmse(e_WF), rmse(e_FA), rmse(e_csr)]).T
-df_mafe = np.vstack([mafe(e_mean), mafe(e_AR), mafe(e_KS), mafe(e_WF), mafe(e_FA), mafe(e_csr)]).T
+df_rmse = np.vstack([rmse(e_mean), rmse(e_AR), rmse(e_KS), rmse(e_WF), rmse(e_FA), rmse(e_csr), rmse(e_csr_lag)]).T
+df_mafe = np.vstack([mafe(e_mean), mafe(e_AR), mafe(e_KS), mafe(e_WF), mafe(e_FA), mafe(e_csr), rmse(e_csr_lag)]).T
 mOutM= np.vstack([df_rmse, df_mafe])
-dfOut1 = pd.DataFrame(mOutM, columns=['$Mean model$', '$AR(1)$', '$Kitchen-sink$', '$Weighted forecast$', '$FAVAR$', '$CSR$'],
+dfOut1 = pd.DataFrame(mOutM, columns=['$Mean model$', '$AR(1)$', '$Kitchen-sink$', '$Weighted forecast$', '$FAVAR$',
+                                      '$CSR$', '$CSRL$'],
                       index=['MSFE','MAFE'])
 print(dfOut1.to_latex(escape=False))
 print(rmse(e_mean))
@@ -159,6 +173,7 @@ print(rmse(e_KS))
 print(rmse(e_WF))
 print(rmse(e_FA))
 print(rmse(e_csr))
+print(rmse(e_csr_lag))
 
 
 def DieboldMarianoTest(mE, Name, loss):
@@ -189,7 +204,7 @@ DieboldMarianoTest(mE, Name, 'MAFE')
 """ Investigate instability """
 # Calculate 2-year moving average of forecast errors and plot
 
-errors = [e_AR, e_mean, e_KS, e_WF, e_FA, e_csr]
+errors = [e_AR, e_mean, e_KS, e_WF, e_FA, e_csr, e_csr_lag]
 moving_avg = []
 
 for error in errors:
@@ -200,12 +215,13 @@ for error in errors:
 
 to_plot = pd.DataFrame(dt[-len(moving_avg[1]):])
 to_plot = pd.concat([to_plot, pd.DataFrame(np.array(moving_avg).T, index=to_plot.index)], axis=1)
-to_plot.columns = ['Month', 'AR', 'Mean', 'KS', 'WF', 'FA', 'CSR']
+to_plot.columns = ['Month', 'AR', 'Mean', 'KS', 'WF', 'FA', 'CSR', 'CSRL']
 
 # plt.close('all')
 # fig = plt.figure()
 to_plot.plot(x='Month')
 plt.show()
+plt.savefig('errors.png')
 
 
 moving_avg_abs = []
@@ -217,7 +233,7 @@ for error in errors:
 
 to_plot2 = pd.DataFrame(dt[-len(moving_avg_abs[1]):])
 to_plot2 = pd.concat([to_plot2, pd.DataFrame(np.array(moving_avg_abs).T, index=to_plot2.index)], axis=1)
-to_plot2.columns = ['Month', 'AR', 'Mean', 'KS', 'WF', 'FA']
+to_plot2.columns = ['Month', 'AR', 'Mean', 'KS', 'WF', 'FA', 'CSR', 'CSRL']
 to_plot2.plot(x='Month')
 plt.show()
 
