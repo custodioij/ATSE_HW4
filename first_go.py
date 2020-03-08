@@ -92,6 +92,9 @@ def csr(vY, mX, vX_new, y_new, lag=False, k=None):
     mX = mX[:, 1:]  # Remove constant
     vX_new = vX_new[1:]
     if lag:
+        current = mX[1:, :]
+        lagged = mX[:-1, :]
+        mX = np.hstack((current, lagged))
         # current = mX[1:, :]
         # lagged = mX[:-1, :]
         # mX = np.hstack((current, lagged))
@@ -103,10 +106,11 @@ def csr(vY, mX, vX_new, y_new, lag=False, k=None):
         vX_new = vX_new[1:]
     if k is None:
         k = mX.shape[1]  # Account for the constant!
+        k = mX.shape[1]  # Account for the constant!
     # Create combinations
     l_subset = []
     for i in range(k):
-        l_subset += list(iter.combinations([j for j in range(k)], i+1))
+        l_subset += list(iter.combinations([j for j in range(k)], i + 1))
     l_yfit = []
     for t_subset in l_subset:
         xx = stats.add_constant(mX[:, t_subset])
@@ -117,7 +121,7 @@ def csr(vY, mX, vX_new, y_new, lag=False, k=None):
         betas = ols.EstimateMM(vY, xx)
         l_yfit += [ols.OLS_predict(xnew, betas)]
     yfit = np.mean(l_yfit)
-    error = y_new -yfit
+    error = y_new - yfit
     return [error, yfit]
 
 
@@ -160,11 +164,10 @@ mafe = lambda xx: np.mean(np.abs([x for x in xx]))
 
 
 df_rmse = np.vstack([rmse(e_mean), rmse(e_AR), rmse(e_KS), rmse(e_WF), rmse(e_FA), rmse(e_csr), rmse(e_csr_lag)]).T
-df_mafe = np.vstack([mafe(e_mean), mafe(e_AR), mafe(e_KS), mafe(e_WF), mafe(e_FA), mafe(e_csr), rmse(e_csr_lag)]).T
+df_mafe = np.vstack([mafe(e_mean), mafe(e_AR), mafe(e_KS), mafe(e_WF), mafe(e_FA), mafe(e_csr), mafe(e_csr_lag)]).T
 mOutM= np.vstack([df_rmse, df_mafe])
 dfOut1 = pd.DataFrame(mOutM, columns=['$Mean model$', '$AR(1)$', '$Kitchen-sink$', '$Weighted forecast$', '$FAVAR$',
-                                      '$CSR$', '$CSRL$'],
-                      index=['MSFE','MAFE'])
+                                      '$CSR$', '$CSRL$'], index=['MSFE','MAFE'])
 print(dfOut1.to_latex(escape=False))
 print(rmse(e_mean))
 print(rmse(e_AR))
@@ -173,7 +176,6 @@ print(rmse(e_KS))
 print(rmse(e_WF))
 print(rmse(e_FA))
 print(rmse(e_csr))
-print(rmse(e_csr_lag))
 
 
 def DieboldMarianoTest(mE, Name, loss):
@@ -220,8 +222,9 @@ to_plot.columns = ['Month', 'AR', 'Mean', 'KS', 'WF', 'FA', 'CSR', 'CSRL']
 # plt.close('all')
 # fig = plt.figure()
 to_plot.plot(x='Month')
-plt.show()
 plt.savefig('errors.png')
+plt.show()
+
 
 
 moving_avg_abs = []
