@@ -237,10 +237,10 @@ to_plot2.columns = ['Month', 'AR', 'Mean', 'KS', 'WF', 'FA', 'CSR', 'CSRL']
 to_plot2.plot(x='Month')
 plt.show()
 
-Columns = np.array(('AR(1)', 'Kitchen-sink', 'FAVAR'))
-yFit = np.array((yFit_AR, yFit_KS, yFit_FA)).T
+Columns = np.array(('AR(1)', 'Kitchen-sink', 'FAVAR', 'CSRL', 'CSR'))
+yFit = np.array((yFit_AR, yFit_KS, yFit_FA, yFit_CSR_lag, yFit_CSR)).T
 ii = dt[(dt == "1980-01-01")].index[0]
-for i in range(3):
+for i in range(len(Columns)):
     to_plot3 = pd.DataFrame(dt[ii:])
     to_plot3 = pd.concat([to_plot3, pd.DataFrame(np.vstack((data.iloc[ii:, 1], yFit[:,i])).T, index=to_plot3.index)], axis=1)
     to_plot3 = to_plot3.set_index('Month')
