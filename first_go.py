@@ -106,7 +106,8 @@ def csr(vY, mX, vX_new, y_new, lag=False, k=None):
     # Create combinations
     l_subset = []
     for i in range(k):
-        l_subset += list(iter.combinations([j for j in range(k)], i + 1))
+        l_subset += list(iter.combinations([j for j in range(k)], i+1))
+    # l_subset = list(iter.combinations([j for j in range(k)], 4))
     l_yfit = []
     for t_subset in l_subset:
         xx = stats.add_constant(mX[:, t_subset])
@@ -172,6 +173,7 @@ print(rmse(e_KS))
 print(rmse(e_WF))
 print(rmse(e_FA))
 print(rmse(e_csr))
+print(rmse(e_csr_lag))
 
 
 def DieboldMarianoTest(mE, Name, loss):
@@ -218,6 +220,7 @@ to_plot.columns = ['Month', 'AR', 'Mean', 'KS', 'WF', 'FA', 'CSR', 'CSRL']
 # plt.close('all')
 # fig = plt.figure()
 to_plot.plot(x='Month')
+plt.show()
 plt.savefig('errors.png')
 plt.show()
 
