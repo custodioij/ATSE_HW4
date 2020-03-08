@@ -92,9 +92,6 @@ def csr(vY, mX, vX_new, y_new, lag=False, k=None):
     mX = mX[:, 1:]  # Remove constant
     vX_new = vX_new[1:]
     if lag:
-        current = mX[1:, :]
-        lagged = mX[:-1, :]
-        mX = np.hstack((current, lagged))
         # current = mX[1:, :]
         # lagged = mX[:-1, :]
         # mX = np.hstack((current, lagged))
@@ -105,7 +102,6 @@ def csr(vY, mX, vX_new, y_new, lag=False, k=None):
         mX = mX[:, 1:]
         vX_new = vX_new[1:]
     if k is None:
-        k = mX.shape[1]  # Account for the constant!
         k = mX.shape[1]  # Account for the constant!
     # Create combinations
     l_subset = []
@@ -197,8 +193,8 @@ def DieboldMarianoTest(mE, Name, loss):
     dfDM = pd.DataFrame(np.round(mRes, 4), index=Name, columns=Name)
     print(dfDM.to_latex(escape=False))
 
-mE = np.vstack(np.array([e_mean, e_AR, e_KS, e_WF, e_FA])).T
-Name = np.array(('$Mean model$', '$AR(1)$', '$Kitchen-sink$', '$Weighted forecast$', '$FAVAR$'))
+mE = np.vstack(np.array([e_mean, e_AR, e_KS, e_WF, e_FA, e_csr, e_csr_lag])).T
+Name = np.array(('$Mean model$', '$AR(1)$', '$Kitchen-sink$', '$Weighted forecast$', '$FAVAR$', 'CSR', 'CSRL'))
 DieboldMarianoTest(mE, Name, 'RMSE')
 DieboldMarianoTest(mE, Name, 'MAFE')
 
