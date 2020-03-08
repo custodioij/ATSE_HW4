@@ -4,7 +4,7 @@ import numpy as np
 import OLS_func as ols
 from sklearn.decomposition import PCA
 import matplotlib.pyplot as plt
-
+import itertools as iter
 
 
 data = pd.read_excel("USEMP.xlsx")
@@ -87,6 +87,29 @@ def factor_augmented(vY, mX, vX_new, y_new):
     return error
 
 
+def csr(vY, mX, vX_new, y_new, lag=False, k=None):
+    mX = mX[:, 1:]  # Remove constant
+    vX_new = vX_new[1:]
+    if lag:
+        current = mX[1:, :]
+        lagged = mX[:-1, :]
+        mX = np.hstack((current, lagged))
+    if k is None:
+        k = mX.shape[1] # Account for the constant!
+    # Create combinations
+    l_subset = []
+    for i in range(k):
+        l_subset += list(iter.combinations([j for j in range(k)], i+1))
+    l_yfit = []
+    for t_subset in l_subset:
+        xx = stats.add_constant(mX[:, t_subset])
+        xnew = np.hstack((1, vX_new[list(t_subset)]))
+        betas = ols.EstimateMM(vY, xx)
+        l_yfit += [ols.OLS_predict(xnew, betas)]
+    error = y_new - np.mean(l_yfit)
+    return error
+
+
 """ Big loop to get predictions """
 
 windows = window_fct()
@@ -95,6 +118,7 @@ e_WF = []
 e_AR = []
 e_FA = []
 e_mean = []
+e_csr = []
 for window in windows:
     X = mX[window[0]:window[1], :]
     X_new = mX[window[1], :]
@@ -105,6 +129,7 @@ for window in windows:
     e_AR += [AR1(Y, X, X_new, y_new)]
     e_FA += [factor_augmented(Y, X, X_new, y_new)]
     e_mean += [np.mean(Y) - y_new]
+    e_csr += [csr(Y, X, X_new, y_new)]
 
 """ Comparison """
 # RMSE:
@@ -112,10 +137,11 @@ rmse = lambda xx: np.sqrt(np.mean([x**2 for x in xx]))
 mafe = lambda xx: np.mean(np.abs([x for x in xx]))
 
 
-df_rmse = np.vstack([rmse(e_mean), rmse(e_AR), rmse(e_KS), rmse(e_WF), rmse(e_FA)]).T
-df_mafe = np.vstack([mafe(e_mean), mafe(e_AR), mafe(e_KS), mafe(e_WF), mafe(e_FA)]).T
+df_rmse = np.vstack([rmse(e_mean), rmse(e_AR), rmse(e_KS), rmse(e_WF), rmse(e_FA), rmse(e_csr)]).T
+df_mafe = np.vstack([mafe(e_mean), mafe(e_AR), mafe(e_KS), mafe(e_WF), mafe(e_FA), mafe(e_csr)]).T
 mOutM= np.vstack([df_rmse, df_mafe])
-dfOut1 = pd.DataFrame(mOutM, columns =['$Mean model$', '$AR(1)$', '$Kitchen-sink$', '$Weighted forecast$', '$FAVAR$'], index=['MSFE','MAFE'])
+dfOut1 = pd.DataFrame(mOutM, columns=['$Mean model$', '$AR(1)$', '$Kitchen-sink$', '$Weighted forecast$', '$FAVAR$', '$CSR$'],
+                      index=['MSFE','MAFE'])
 print(dfOut1.to_latex(escape=False))
 print(rmse(e_mean))
 print(rmse(e_AR))
@@ -123,11 +149,12 @@ print(rmse(e_AR))
 print(rmse(e_KS))
 print(rmse(e_WF))
 print(rmse(e_FA))
+print(rmse(e_csr))
 
 """ Investigate instability """
 # Calculate 2-year moving average of forecast errors and plot
 
-errors = [e_AR, e_mean, e_KS, e_WF, e_FA]
+errors = [e_AR, e_mean, e_KS, e_WF, e_FA, e_csr]
 moving_avg = []
 
 for error in errors:
@@ -138,7 +165,7 @@ for error in errors:
 
 to_plot = pd.DataFrame(dt[-len(moving_avg[1]):])
 to_plot = pd.concat([to_plot, pd.DataFrame(np.array(moving_avg).T, index=to_plot.index)], axis=1)
-to_plot.columns = ['Month', 'AR', 'Mean', 'KS', 'WF', 'FA']
+to_plot.columns = ['Month', 'AR', 'Mean', 'KS', 'WF', 'FA', 'CSR']
 
 # plt.close('all')
 # fig = plt.figure()
